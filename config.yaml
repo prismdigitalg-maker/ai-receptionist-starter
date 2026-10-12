@@ -1,0 +1,14 @@
+# AI Receptionist — settings
+# Edit these values, save, and restart the server. That is the whole "training".
+
+brand_name: Bright Smile Dental
+brand_city: Manchester
+assistant_name: Alex
+opening_hours: Tuesday to Thursday, 9am to 5pm
+services: check-ups, hygiene appointments, cosmetic work, emergency care
+
+# OpenRouter models — ears, brain and voice. Cheaper = softer voice; see the course notes.
+stt_model: openai/gpt-4o-mini-transcribe
+llm_model: google/gemini-2.5-flash-lite
+tts_model: elevenlabs/eleven-flash-v2.5
+tts_voice: george

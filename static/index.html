@@ -1,0 +1,112 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhoneSteward — AI Receptionist</title>
+<style>
+:root{--bg:#0b1220;--panel:#121c2e;--panel2:#0f1829;--line:#22324c;--ink:#eaf1fb;--mut:#8aa0bd;--teal:#25d0b0;--amber:#ffb454;--caller:#2b3c58}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial;background:radial-gradient(1200px 700px at 70% -10%,#16233a,#0b1220);color:var(--ink);height:100vh;overflow:hidden}
+.bar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:#0c1524}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.2px}
+.logo b{background:linear-gradient(90deg,var(--teal),#5bd6ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.pill{font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+.stack{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.stack .pill b{color:var(--ink)}
+.wrap{display:grid;grid-template-columns:330px 1fr;gap:18px;padding:18px 20px;height:calc(100vh - 55px)}
+.card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px}
+.call{padding:18px;display:flex;flex-direction:column;gap:14px}
+.badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--teal);background:#0e2a24;border:1px solid #175143;padding:4px 10px;border-radius:20px;width:max-content}
+.cname{font-size:20px;font-weight:700;margin-top:2px}.cnum{color:var(--mut);font-size:13px}
+.timer{font-variant-numeric:tabular-nums;font-size:34px;font-weight:800;letter-spacing:1px}
+.btn{border:0;border-radius:11px;padding:12px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.answer{background:var(--teal);color:#052a22}.hang{background:#3a2330;color:#ff9db4}
+.mic{background:linear-gradient(90deg,#25d0b0,#5bd6ff);color:#052a22}
+.ghost{background:#16233a;color:var(--ink);border:1px solid var(--line)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.conv{padding:16px 18px;display:flex;flex-direction:column;min-height:0}
+.conv h3{margin:0 0 10px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+.msgs{overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:6px}
+.row{display:flex;gap:10px;max-width:78%;opacity:0;transform:translateY(6px);animation:in .35s forwards}
+@keyframes in{to{opacity:1;transform:none}}
+.row.me{align-self:flex-end;flex-direction:row-reverse}
+.av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:800;color:#062a26;background:linear-gradient(90deg,#25d0b0,#5bd6ff)}
+.row.me .av{background:var(--caller);color:var(--ink)}
+.bub{background:#16233a;border:1px solid var(--line);padding:10px 13px;border-radius:13px}
+.row.me .bub{background:var(--caller);border-color:#3a4f70}
+.who{font-size:11px;color:var(--mut);margin-bottom:3px}
+.foot{display:flex;gap:10px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.foot .hint{color:var(--mut);font-size:12px}
+.status{font-size:12px;color:var(--mut);margin-left:auto}
+</style></head><body>
+<div class="bar">
+  <div class="logo"><span class="dot"></span> <b>PhoneSteward</b> <span style="color:var(--mut);font-weight:500">AI Receptionist</span></div>
+  <div class="pill">LIVE</div>
+  <div class="stack">
+    <span class="pill">ears <b>OpenRouter · gpt-4o-mini-transcribe</b></span>
+    <span class="pill">brain <b>gemini-2.5-flash-lite</b></span>
+    <span class="pill">voice <b>ElevenLabs Flash v2.5</b></span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card call">
+    <span class="badge"><span class="dot"></span> Incoming call</span>
+    <div>
+      <div class="cname">Bright Smile Dental</div>
+      <div class="cnum">+44 7700 900123 · Manchester</div>
+    </div>
+    <div class="timer" id="timer">00:00</div>
+    <button class="btn answer" id="answer">Answer call</button>
+    <button class="btn hang" id="hang" disabled>End call</button>
+    <div style="color:var(--mut);font-size:12px">Everything below is generated live through OpenRouter — the caller's words, the reply, and the voice.</div>
+  </div>
+
+  <div class="card conv">
+    <h3>Live transcript</h3>
+    <div class="msgs" id="msgs"></div>
+    <div class="foot">
+      <button class="btn mic" id="talk" disabled>🎙 Tap to talk</button>
+      <button class="btn ghost" id="replay" disabled>Replay caller</button>
+      <span class="hint">Speak, then tap again — it transcribes, thinks, and answers out loud.</span>
+      <span class="status" id="status">idle</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id); let recorder, chunks=[], stream, t0, tick, listening=false;
+function bubble(who,text,me){const r=document.createElement('div');r.className='row'+(me?' me':'');
+  r.innerHTML=`<div class="av">${me?'C':'A'}</div><div><div class="who">${who}</div><div class="bub">${text}</div></div>`;
+  $('msgs').appendChild(r);$('msgs').scrollTop=1e9;}
+function setStatus(s){$('status').textContent=s;}
+window.addEventListener('load',()=>{setStatus('ready — OpenRouter key live');});
+$('answer').onclick=async()=>{try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}
+  catch(e){setStatus('mic blocked: '+e.message);return;}
+  $('answer').disabled=true;$('hang').disabled=false;$('talk').disabled=false;setStatus('call connected');
+  t0=Date.now();tick=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);
+    $('timer').textContent=String((s/60|0)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');},250);};
+$('hang').onclick=()=>{clearInterval(tick);if(stream)stream.getTracks().forEach(t=>t.stop());
+  $('answer').disabled=false;$('talk').disabled=true;$('hang').disabled=true;setStatus('call ended');};
+async function toggle(){ if(listening){ stopRec(); return; }
+  listening=true;$('talk').textContent='● Listening…';setStatus('recording');chunks=[];
+  recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm')?'audio/webm':''});
+  recorder.ondataavailable=e=>chunks.push(e.data);recorder.start();
+  window.__stopRec=()=>{ if(listening) stopRec(); };
+}
+function stopRec(){ if(recorder && recorder.state!=='inactive'){recorder.onstop=send;recorder.stop();} listening=false;
+  $('talk').textContent='🎙 Tap to talk'; }
+async function send(){ setStatus('thinking…');
+  const blob=new Blob(chunks,{type:'audio/webm'});
+  const r=await fetch('/turn',{method:'POST',body:blob}); const j=await r.json();
+  if(j.transcript)bubble('Caller',j.transcript,true);
+  if(j.reply){bubble('Alex · PhoneSteward',j.reply,false);
+    const a=new Audio('data:audio/mpeg;base64,'+j.audio);a.play();$('replay').disabled=false;
+    window.__lastAudio=j.audio;}
+  setStatus(j.reply?'answered':'no speech detected');}
+$('talk').onclick=toggle;
+$('replay').onclick=()=>{ if(window.__lastAudio) new Audio('data:audio/mpeg;base64,'+window.__lastAudio).play(); };
+// automation hooks
+window.answerCall=()=>$('answer').click();
+window.talk=()=>toggle();
+window.stopTalk=()=>{ if(listening) stopRec(); };
+window.state=()=>$('msgs').innerText;
+</script></body></html>

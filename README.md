@@ -17,7 +17,7 @@ No subscriptions. No per-seat fees. You pay **pennies per call** and you own the
 # 1. get a key at https://openrouter.ai/keys  (add a few $ of credit)
 export OPENROUTER_API_KEY=sk-or-...        # Windows PowerShell: setx OPENROUTER_API_KEY "sk-or-..."
 
-# 2. run it (Python 3.11+ and ffmpeg required — see the course, Module 2)
+# 2. run it (only Python 3.11+ required — no pip installs, no ffmpeg)
 python server.py
 
 # 3. open the page and talk to it

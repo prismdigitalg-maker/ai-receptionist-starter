@@ -10,7 +10,7 @@ Pure Python standard library — no dependencies to install.
 
 Edit config.yaml to change the business, the assistant's name, hours, models and voice.
 """
-import os, json, uuid, base64, subprocess, tempfile, urllib.request
+import os, json, uuid, base64, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -49,11 +49,22 @@ def _post_json(url, payload):
     return json.load(urllib.request.urlopen(req, timeout=60))
 
 
-def transcribe(wav_bytes):
+def _sniff(b):
+    if b[:4] == b"RIFF":
+        return "audio.wav", "audio/wav"
+    if b[:4] == b"OggS":
+        return "audio.ogg", "audio/ogg"
+    if b[4:8] == b"ftyp":
+        return "audio.m4a", "audio/mp4"
+    return "audio.webm", "audio/webm"
+
+
+def transcribe(raw):
+    filename, ctype = _sniff(raw)
     b = "----b" + uuid.uuid4().hex
     body = (f'--{b}\r\nContent-Disposition: form-data; name="model"\r\n\r\n{CFG.get("stt_model")}\r\n'
-            f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="audio.wav"\r\n'
-            f'Content-Type: audio/wav\r\n\r\n').encode() + wav_bytes + f"\r\n--{b}--\r\n".encode()
+            f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {ctype}\r\n\r\n").encode() + raw + f"\r\n--{b}--\r\n".encode()
     req = urllib.request.Request(OR + "/audio/transcriptions", data=body,
         headers={"Authorization": f"Bearer {KEY()}", "Content-Type": f"multipart/form-data; boundary={b}"})
     return json.load(urllib.request.urlopen(req, timeout=60)).get("text", "").strip()
@@ -71,14 +82,6 @@ def speak(text):
                          "voice": CFG.get("tts_voice"), "response_format": "mp3"}).encode(),
         headers={"Authorization": f"Bearer {KEY()}", "Content-Type": "application/json"})
     return urllib.request.urlopen(req, timeout=60).read()
-
-
-def to_wav(raw):
-    with tempfile.NamedTemporaryFile(suffix=".in", delete=False) as f:
-        f.write(raw); inp = f.name
-    out = inp + ".wav"
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", inp, "-ac", "1", "-ar", "16000", out], check=True)
-    return Path(out).read_bytes()
 
 
 class H(BaseHTTPRequestHandler):
@@ -102,7 +105,7 @@ class H(BaseHTTPRequestHandler):
         raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         try:
             if self.path == "/turn":
-                text = transcribe(to_wav(raw))
+                text = transcribe(raw)
                 if not text:
                     return self._send(200, "application/json", b'{"transcript":"","reply":"","audio":""}')
                 ans = reply(text); mp3 = speak(ans)
